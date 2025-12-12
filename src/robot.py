@@ -150,13 +150,44 @@ class TrajectoryController:
                 waypoints.append([x, y])
                 
         elif self.trajectory_type == "figure8":
+            # Generate waypoints for complex racetrack
             scale = self.params.get('scale', 6.0)
-            omega = 0.15
+            omega = 0.08
             duration = 2 * np.pi / omega
+            
             for i in range(num_points):
                 t = duration * i / num_points
-                x = scale * np.sin(omega * t)
-                y = scale * np.sin(omega * t) * np.cos(omega * t)
+                phase = omega * t
+                section = (phase % (2 * np.pi))
+                
+                if section < np.pi / 2:  # Sharp right turn
+                    angle = section * 4
+                    radius = scale * 1.2
+                    x = radius * np.cos(angle) + scale * 0.5
+                    y = radius * np.sin(angle) - scale * 0.3
+                    
+                elif section < np.pi:  # Straightaway
+                    progress = (section - np.pi/2) / (np.pi/2)
+                    x = scale * (1.7 - 3.0 * progress)
+                    y = scale * (0.9 + 0.4 * np.sin(progress * np.pi))
+                    
+                elif section < 3 * np.pi / 2:  # Hairpin turn
+                    angle = (section - np.pi) * 3 + np.pi
+                    radius = scale * 0.6
+                    x = radius * np.cos(angle) - scale * 1.2
+                    y = radius * np.sin(angle) + scale * 0.8
+                    
+                else:  # S-curve back
+                    progress = (section - 3*np.pi/2) / (np.pi/2)
+                    x = scale * (-1.8 + 2.3 * progress)
+                    y = scale * (0.8 - 1.6 * progress + 0.5 * np.sin(progress * 2 * np.pi))
+                
+                # Add wobble
+                wobble_x = scale * 0.15 * np.sin(phase * 5)
+                wobble_y = scale * 0.1 * np.cos(phase * 7)
+                x += wobble_x
+                y += wobble_y
+                
                 waypoints.append([x, y])
         
         return np.array(waypoints)
@@ -271,42 +302,97 @@ class TrajectoryController:
             return v, w
             
         elif self.trajectory_type == "figure8":
-            # Figure-8 trajectory (Lemniscate curve)
+            # Complex racetrack with multiple distinct sections
             scale = self.params.get('scale', 6.0)
             v_desired = self.params.get('velocity', 1.2)
             
-            # Parametric figure-8: x = a*sin(t), y = a*sin(t)*cos(t)
-            # Period adjusted for visible loops
-            omega = 0.15  # Fixed angular frequency for good figure-8 shape
+            # Use time to create distinct track sections
+            omega = 0.08  # Slower for more variation
+            phase = omega * t
             
-            # Desired position on figure-8
-            desired_x = scale * np.sin(omega * t)
-            desired_y = scale * np.sin(omega * t) * np.cos(omega * t)
+            # Section 1: Large outer loop (0 to 2π)
+            section = (phase % (2 * np.pi))
             
-            # Velocity on the curve (derivatives)
-            desired_vx = scale * omega * np.cos(omega * t)
-            desired_vy = scale * omega * (np.cos(2 * omega * t))
+            if section < np.pi / 2:  # First quarter - sharp right turn
+                angle = section * 4
+                radius = scale * 1.2
+                desired_x = radius * np.cos(angle) + scale * 0.5
+                desired_y = radius * np.sin(angle) - scale * 0.3
+                
+            elif section < np.pi:  # Second quarter - straightaway
+                progress = (section - np.pi/2) / (np.pi/2)
+                desired_x = scale * (1.7 - 3.0 * progress)
+                desired_y = scale * (0.9 + 0.4 * np.sin(progress * np.pi))
+                
+            elif section < 3 * np.pi / 2:  # Third quarter - hairpin turn
+                angle = (section - np.pi) * 3 + np.pi
+                radius = scale * 0.6
+                desired_x = radius * np.cos(angle) - scale * 1.2
+                desired_y = radius * np.sin(angle) + scale * 0.8
+                
+            else:  # Fourth quarter - S-curve back
+                progress = (section - 3*np.pi/2) / (np.pi/2)
+                desired_x = scale * (-1.8 + 2.3 * progress)
+                desired_y = scale * (0.8 - 1.6 * progress + 0.5 * np.sin(progress * 2 * np.pi))
             
-            # Desired heading (tangent to curve)
+            # Add wobble for realism
+            wobble_x = scale * 0.15 * np.sin(phase * 5)
+            wobble_y = scale * 0.1 * np.cos(phase * 7)
+            
+            desired_x += wobble_x
+            desired_y += wobble_y
+            
+            # Compute velocity (numerical derivative)
+            dt = 0.01
+            phase_next = omega * (t + dt)
+            section_next = (phase_next % (2 * np.pi))
+            
+            if section_next < np.pi / 2:
+                angle_next = section_next * 4
+                radius = scale * 1.2
+                x_next = radius * np.cos(angle_next) + scale * 0.5
+                y_next = radius * np.sin(angle_next) - scale * 0.3
+            elif section_next < np.pi:
+                progress_next = (section_next - np.pi/2) / (np.pi/2)
+                x_next = scale * (1.7 - 3.0 * progress_next)
+                y_next = scale * (0.9 + 0.4 * np.sin(progress_next * np.pi))
+            elif section_next < 3 * np.pi / 2:
+                angle_next = (section_next - np.pi) * 3 + np.pi
+                radius = scale * 0.6
+                x_next = radius * np.cos(angle_next) - scale * 1.2
+                y_next = radius * np.sin(angle_next) + scale * 0.8
+            else:
+                progress_next = (section_next - 3*np.pi/2) / (np.pi/2)
+                x_next = scale * (-1.8 + 2.3 * progress_next)
+                y_next = scale * (0.8 - 1.6 * progress_next + 0.5 * np.sin(progress_next * 2 * np.pi))
+            
+            wobble_x_next = scale * 0.15 * np.sin(phase_next * 5)
+            wobble_y_next = scale * 0.1 * np.cos(phase_next * 7)
+            x_next += wobble_x_next
+            y_next += wobble_y_next
+            
+            desired_vx = (x_next - desired_x) / dt
+            desired_vy = (y_next - desired_y) / dt
+            
+            # Desired heading
             desired_theta = np.arctan2(desired_vy, desired_vx)
             
-            # Current errors
+            # Errors
             error_x = desired_x - current_state[0]
             error_y = desired_y - current_state[1]
             error_theta = normalize_angle(desired_theta - current_state[2])
             
-            # Proportional feedback control
-            kp_v = 2.0  # Position gain
-            kp_w = 3.0  # Heading gain
+            # Aggressive control for complex path
+            kp_v = 3.0
+            kp_w = 5.0
             
-            # Compute controls
             error_dist = np.sqrt(error_x**2 + error_y**2)
             v = v_desired + kp_v * error_dist
             w = kp_w * error_theta
             
-            # Limit controls
-            v = np.clip(v, 0, 3.0)
-            w = np.clip(w, -2.0, 2.0)
+            # Wider limits for aggressive maneuvering
+            v = np.clip(v, 0, 4.0)
+            w = np.clip(w, -3.0, 3.0)
             
             return v, w
         
