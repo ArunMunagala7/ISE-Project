@@ -42,11 +42,11 @@ class EKF_SLAM:
         self.sigma = np.zeros((state_dim, state_dim))
         self.sigma[0:3, 0:3] = initial_cov
         
-        # Initialize landmarks with moderate uncertainty
+        # Initialize landmarks with high uncertainty (not yet observed)
         for i in range(num_landmarks):
             idx = 3 + 2*i
-            # Use smaller initial uncertainty to avoid numerical issues
-            self.sigma[idx:idx+2, idx:idx+2] = np.eye(2) * INITIAL_LANDMARK_COV
+            # Large but not excessive uncertainty for unobserved landmarks
+            self.sigma[idx:idx+2, idx:idx+2] = np.eye(2) * 100.0
         
         # Track which landmarks have been observed
         self.landmark_initialized = np.zeros(num_landmarks, dtype=bool)
@@ -114,13 +114,10 @@ class EKF_SLAM:
         # --- Update Covariance ---
         self.sigma = G @ self.sigma @ G.T + Q
         
-        # Ensure symmetry and prevent overflow
+        # Ensure symmetry and numerical stability
         self.sigma = (self.sigma + self.sigma.T) / 2
-        self.sigma = np.clip(self.sigma, -1e10, 1e10)
-        
-        # Ensure symmetry and clip to prevent overflow
-        self.sigma = (self.sigma + self.sigma.T) / 2
-        self.sigma = np.clip(self.sigma, -1e10, 1e10)
+        # Add small regularization to diagonal to prevent singularity
+        self.sigma += np.eye(state_dim) * 1e-9
     
     def measurement_model(self, robot_pose, landmark_pos):
         """
@@ -136,13 +133,13 @@ class EKF_SLAM:
         x, y, theta = robot_pose
         lx, ly = landmark_pos
         
-        # Difference in position
+        # Delta position
         dx = lx - x
         dy = ly - y
         
-        # Range (distance)
+        # Range (distance) - add epsilon to avoid zero
         q = dx**2 + dy**2
-        range_pred = np.sqrt(q)
+        range_pred = np.sqrt(q + 1e-6)
         
         # Bearing (angle relative to robot heading)
         bearing_pred = normalize_angle(np.arctan2(dy, dx) - theta)
@@ -168,18 +165,19 @@ class EKF_SLAM:
         dx = lx - x
         dy = ly - y
         q = dx**2 + dy**2
-        sqrt_q = np.sqrt(q)
+        sqrt_q = np.sqrt(q + 1e-6)  # Add small epsilon to avoid division by zero
+        q_safe = max(q, 1e-6)  # Avoid division by very small numbers
         
         # Partial derivatives with respect to robot pose
         H_robot = np.array([
             [-dx/sqrt_q, -dy/sqrt_q, 0],
-            [dy/q, -dx/q, -1]
+            [dy/q_safe, -dx/q_safe, -1]
         ])
         
         # Partial derivatives with respect to landmark position
         H_landmark = np.array([
             [dx/sqrt_q, dy/sqrt_q],
-            [-dy/q, dx/q]
+            [-dy/q_safe, dx/q_safe]
         ])
         
         return H_robot, H_landmark
@@ -272,11 +270,14 @@ class EKF_SLAM:
         self.mu[landmark_idx] = lx
         self.mu[landmark_idx + 1] = ly
         
-        # Update covariance for this landmark
-        # This should account for uncertainty in robot pose and measurement
-        # Use reasonable initial uncertainty based on measurement noise
-        from config.params import MEASUREMENT_NOISE_RANGE
-        init_cov = (MEASUREMENT_NOISE_RANGE * 2) ** 2
+        # Update covariance for this landmark based on measurement uncertainty
+        # Use measurement noise scaled by range for realistic initialization
+        from config.params import MEASUREMENT_NOISE_RANGE, MEASUREMENT_NOISE_BEARING
+        
+        # Conservative initial uncertainty
+        range_unc = max(MEASUREMENT_NOISE_RANGE * 3, range_meas * 0.05)
+        init_cov = range_unc ** 2
+        
         self.sigma[landmark_idx:landmark_idx+2, landmark_idx:landmark_idx+2] = np.eye(2) * init_cov
         
         # Mark as initialized

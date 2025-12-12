@@ -86,13 +86,12 @@ def create_figure8_trajectory(scale=5.0, num_points=200):
 
 def generate_random_landmarks(num_landmarks, area_size):
     """
-    Generate scattered landmark positions strategically placed for challenge
+    Generate strategically distributed landmarks for good SLAM coverage
     
     Creates landmarks that are:
-    - Widely scattered across the environment
-    - Some near the trajectory path, some far
-    - Forcing robot to rely on sparse observations
-    - Testing long-range and short-range sensing
+    - Some near the trajectory path (easy to observe)
+    - Some at medium distance (moderate challenge)
+    - Some far away (testing sensor limits)
     
     Args:
         num_landmarks: Number of landmarks to generate
@@ -103,44 +102,36 @@ def generate_random_landmarks(num_landmarks, area_size):
     """
     landmarks = []
     
-    # Divide landmarks into different zones for strategic placement
-    zone_size = area_size / 3
-    
-    # Zone 1: Inner zone (near path) - 30% of landmarks
-    inner_count = int(num_landmarks * 0.3)
+    # Zone 1: Inner zone (3-6m from origin) - 40% of landmarks
+    inner_count = int(num_landmarks * 0.4)
     for i in range(inner_count):
-        r = np.random.uniform(3, 8)  # Distance from center
+        r = np.random.uniform(3, 6)  # Close to figure-8 path
         theta = np.random.uniform(0, 2*np.pi)
         x = r * np.cos(theta)
         y = r * np.sin(theta)
         landmarks.append([x, y])
     
-    # Zone 2: Mid zone - 40% of landmarks  
+    # Zone 2: Mid zone (6-10m from origin) - 40% of landmarks  
     mid_count = int(num_landmarks * 0.4)
     for i in range(mid_count):
-        r = np.random.uniform(8, area_size * 0.4)
+        r = np.random.uniform(6, 10)
         theta = np.random.uniform(0, 2*np.pi)
         x = r * np.cos(theta)
         y = r * np.sin(theta)
         landmarks.append([x, y])
     
-    # Zone 3: Outer zone (challenging to see) - remaining landmarks
+    # Zone 3: Outer zone (far landmarks) - remaining 20%
     remaining = num_landmarks - len(landmarks)
     for i in range(remaining):
-        # Scattered in outer regions
         x = np.random.uniform(-area_size/2, area_size/2)
         y = np.random.uniform(-area_size/2, area_size/2)
-        # Ensure they're in outer zone
-        while np.sqrt(x**2 + y**2) < area_size * 0.4:
+        # Ensure they're in outer zone (> 10m)
+        while np.sqrt(x**2 + y**2) < 10:
             x = np.random.uniform(-area_size/2, area_size/2)
             y = np.random.uniform(-area_size/2, area_size/2)
         landmarks.append([x, y])
     
-    # Shuffle to avoid any systematic ordering
-    landmarks = np.array(landmarks)
-    np.random.shuffle(landmarks)
-    
-    return landmarks
+    return np.array(landmarks)
 
 
 def compute_mse(estimated, true_values):
