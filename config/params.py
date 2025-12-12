@@ -42,6 +42,18 @@ INITIAL_LANDMARK_COV = 100.0  # Moderate uncertainty for uninitialized landmarks
 # Data association
 MAHALANOBIS_THRESHOLD = 9.21  # Chi-square threshold for 95% confidence (2 DOF)
 
+# Control parameters
+CONTROL_TYPE = "qlearning"  # Options: "feedback" (original), "qlearning" (reinforcement learning)
+
+# Q-Learning parameters (only used when CONTROL_TYPE = "qlearning")
+QL_NUM_BINS = 10  # Number of state discretization bins
+QL_NUM_ACTIONS = 5  # Number of discrete actions (angular velocity offsets)
+QL_ALPHA = 0.1  # Learning rate (how fast to learn)
+QL_GAMMA = 0.9  # Discount factor (future reward importance)
+QL_EPSILON = 0.2  # Exploration rate (probability of random action)
+QL_TRAINING = True  # Whether to train during simulation (True) or use pre-trained model (False)
+QL_MODEL_PATH = "outputs/qlearning_model.npy"  # Path to save/load Q-table
+
 # Visualization
 PLOT_INTERVAL = 10  # Update plot every N steps (balance between speed and smoothness)
 SAVE_VIDEO = True

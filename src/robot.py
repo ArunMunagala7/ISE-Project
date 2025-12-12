@@ -112,23 +112,126 @@ class Robot:
 
 class TrajectoryController:
     """
-    Simple feedback controller to follow a desired trajectory
+    Hybrid controller supporting both feedback and Q-Learning control
     """
     
-    def __init__(self, trajectory_type, params):
+    def __init__(self, trajectory_type, params, control_type="feedback", qlearning_controller=None):
         """
         Initialize controller
         
         Args:
             trajectory_type: Type of trajectory ("circle", "figure8")
             params: Dictionary of trajectory parameters
+            control_type: "feedback" (original PID-like) or "qlearning" (RL-based)
+            qlearning_controller: QLearningController instance (if using Q-Learning)
         """
         self.trajectory_type = trajectory_type
         self.params = params
+        self.control_type = control_type
+        self.qlearning_controller = qlearning_controller
+        
+        # For Q-Learning: precompute trajectory waypoints
+        if control_type == "qlearning" and qlearning_controller is not None:
+            self.trajectory_waypoints = self._generate_trajectory_waypoints()
+            self.prev_state_action = None  # For Q-Learning updates (state, action_idx)
+            self.prev_errors = None  # For reward calculation
+        
+    def _generate_trajectory_waypoints(self, num_points=500):
+        """Generate waypoints along the trajectory for Q-Learning reference"""
+        import numpy as np
+        waypoints = []
+        
+        if self.trajectory_type == "circle":
+            radius = self.params.get('radius', 5.0)
+            for i in range(num_points):
+                theta = 2 * np.pi * i / num_points
+                x = radius * np.cos(theta)
+                y = radius * np.sin(theta)
+                waypoints.append([x, y])
+                
+        elif self.trajectory_type == "figure8":
+            scale = self.params.get('scale', 6.0)
+            omega = 0.15
+            duration = 2 * np.pi / omega
+            for i in range(num_points):
+                t = duration * i / num_points
+                x = scale * np.sin(omega * t)
+                y = scale * np.sin(omega * t) * np.cos(omega * t)
+                waypoints.append([x, y])
+        
+        return np.array(waypoints)
         
     def get_control(self, current_state, t):
         """
         Compute control inputs to follow desired trajectory
+        
+        Args:
+            current_state: Current robot state [x, y, theta]
+            t: Current time
+        
+        Returns:
+            (v, w): Linear and angular velocities
+        """
+        # Use Q-Learning control if enabled
+        if self.control_type == "qlearning" and self.qlearning_controller is not None:
+            return self._get_qlearning_control(current_state, t)
+        
+        # Otherwise use original feedback control
+        return self._get_feedback_control(current_state, t)
+    
+    def _get_qlearning_control(self, current_state, t):
+        """
+        Q-Learning based control (learns while running)
+        Combines base feedback control with learned angular velocity offset
+        """
+        from src.qlearning_controller import compute_tracking_errors
+        
+        # Get base feedback control first
+        v_base, w_base = self._get_feedback_control(current_state, t)
+        
+        # Find nearest target point on trajectory
+        distances = np.sqrt((self.trajectory_waypoints[:, 0] - current_state[0])**2 + 
+                          (self.trajectory_waypoints[:, 1] - current_state[1])**2)
+        nearest_idx = np.argmin(distances)
+        look_ahead = min(nearest_idx + 10, len(self.trajectory_waypoints) - 1)
+        target_point = self.trajectory_waypoints[look_ahead]
+        
+        # Compute tracking errors for Q-Learning
+        lateral_error, heading_error = compute_tracking_errors(
+            current_state, target_point, self.trajectory_waypoints
+        )
+        
+        # Get Q-Learning action (angular velocity offset)
+        omega_offset, state, action_idx = self.qlearning_controller.get_control_offset(
+            lateral_error, heading_error, training=True
+        )
+        
+        # Update Q-table if we have previous state-action pair
+        if self.prev_state_action is not None:
+            prev_state, prev_action = self.prev_state_action
+            prev_lat_err, prev_head_err = self.prev_errors
+            
+            # Compute reward based on improvement
+            reward = self.qlearning_controller.compute_reward(lateral_error, heading_error)
+            
+            # Update Q-table
+            self.qlearning_controller.update_q_table(prev_state, prev_action, reward, state)
+        
+        # Save current state-action for next update
+        self.prev_state_action = (state, action_idx)
+        self.prev_errors = (lateral_error, heading_error)
+        
+        # Apply learned offset to base control
+        w = w_base + omega_offset
+        
+        # Clip to safe limits
+        w = np.clip(w, -2.0, 2.0)
+        
+        return v_base, w
+    
+    def _get_feedback_control(self, current_state, t):
+        """
+        Original feedback control method (kept as fallback)
         
         Args:
             current_state: Current robot state [x, y, theta]

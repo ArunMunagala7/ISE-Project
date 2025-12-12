@@ -29,11 +29,28 @@ def create_slam_gif():
     num_landmarks = NUM_LANDMARKS  # Use from config (now 25)
     true_landmarks = generate_random_landmarks(num_landmarks, LANDMARK_AREA_SIZE)
     robot = Robot(INITIAL_STATE, DT)
+    
+    # Initialize Q-Learning if needed
+    qlearning_controller = None
+    if CONTROL_TYPE == "qlearning":
+        from src.qlearning_controller import QLearningController
+        qlearning_controller = QLearningController(
+            num_bins=QL_NUM_BINS,
+            num_actions=QL_NUM_ACTIONS,
+            alpha=QL_ALPHA,
+            gamma=QL_GAMMA,
+            epsilon=QL_EPSILON
+        )
+        if os.path.exists(QL_MODEL_PATH):
+            qlearning_controller.load_model(QL_MODEL_PATH)
+            print(f"   Loaded Q-Learning model from {QL_MODEL_PATH}")
+    
     controller = TrajectoryController(TRAJECTORY_TYPE, {
         'radius': CIRCLE_RADIUS,
         'velocity': LINEAR_VELOCITY,
         'scale': FIGURE8_SCALE
-    })
+    }, control_type=CONTROL_TYPE, qlearning_controller=qlearning_controller)
+    
     ekf_slam = EKF_SLAM(INITIAL_STATE, num_landmarks, INITIAL_STATE_COV)
     data_assoc = DataAssociation(ekf_slam)
     

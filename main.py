@@ -42,14 +42,36 @@ def run_slam_simulation(args):
     robot = Robot(INITIAL_STATE, DT)
     print(f"Initial state: x={INITIAL_STATE[0]:.2f}, y={INITIAL_STATE[1]:.2f}, θ={INITIAL_STATE[2]:.2f}")
     
+    # Initialize Q-Learning controller if needed
+    qlearning_controller = None
+    if CONTROL_TYPE == "qlearning":
+        from src.qlearning_controller import QLearningController
+        qlearning_controller = QLearningController(
+            num_bins=QL_NUM_BINS,
+            num_actions=QL_NUM_ACTIONS,
+            alpha=QL_ALPHA,
+            gamma=QL_GAMMA,
+            epsilon=QL_EPSILON
+        )
+        # Try to load existing model
+        if os.path.exists(QL_MODEL_PATH):
+            qlearning_controller.load_model(QL_MODEL_PATH)
+            print(f"Loaded Q-Learning model from {QL_MODEL_PATH}")
+        print(f"Q-Learning control enabled (training={QL_TRAINING})")
+    
     # Initialize trajectory controller
     controller_params = {
         'radius': CIRCLE_RADIUS,
         'velocity': LINEAR_VELOCITY,
         'scale': 5.0
     }
-    controller = TrajectoryController(args.trajectory, controller_params)
-    print(f"Trajectory: {args.trajectory}")
+    controller = TrajectoryController(
+        args.trajectory, 
+        controller_params,
+        control_type=CONTROL_TYPE,
+        qlearning_controller=qlearning_controller
+    )
+    print(f"Trajectory: {args.trajectory}, Control: {CONTROL_TYPE}")
     
     # Initialize EKF-SLAM
     print(f"\n--- EKF-SLAM Initialization ---")
@@ -153,6 +175,17 @@ def run_slam_simulation(args):
     if landmark_errors:
         avg_landmark_error = np.mean(landmark_errors)
         print(f"Average landmark position error: {avg_landmark_error:.3f}m")
+    
+    # Save Q-Learning model if used
+    if qlearning_controller is not None and QL_TRAINING:
+        os.makedirs(os.path.dirname(QL_MODEL_PATH), exist_ok=True)
+        qlearning_controller.save_model(QL_MODEL_PATH)
+        print(f"\n--- Q-Learning Statistics ---")
+        print(f"Model saved to: {QL_MODEL_PATH}")
+        q_values = qlearning_controller.q_table
+        print(f"Q-table shape: {q_values.shape}")
+        print(f"Non-zero entries: {np.count_nonzero(q_values)}/{q_values.size}")
+        print(f"Q-value range: [{q_values.min():.3f}, {q_values.max():.3f}]")
     
     # Save plots
     print(f"\n--- Saving Results ---")

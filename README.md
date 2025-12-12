@@ -2,6 +2,8 @@
 
 A complete implementation of SLAM (Simultaneous Localization and Mapping) using the Extended Kalman Filter algorithm. Watch a robot navigate a figure-8 path while building a map of landmarks and localizing itself!
 
+**NEW**: Now includes **Q-Learning reinforcement learning control** for adaptive trajectory tracking! See [QLEARNING_INTEGRATION.md](QLEARNING_INTEGRATION.md) for details.
+
 ![SLAM Animation](outputs/videos/slam_animation.gif)
 
 ## 🎯 What Does This Do?
@@ -118,8 +120,17 @@ pip install -r requirements.txt
 # Run main simulation (interactive plotting)
 python main.py
 
+# Test Q-Learning model
+python test_qlearning.py
+
+# Compare feedback vs Q-Learning control
+python compare_controllers.py
+
 # Generate GIF animation (recommended for viewing results)
 python create_animation.py
+
+# Run 3D OpenGL visualization
+python run_3d_visualization.py
 
 # Analyze simulation results
 python analyze_simulation.py
@@ -133,32 +144,42 @@ pytest tests/test_slam.py
 
 ### Customize Parameters
 Edit `config/params.py` to change:
+- **Control type**: `CONTROL_TYPE = "feedback"` or `"qlearning"`
+- **Q-Learning parameters**: Learning rate, exploration, discretization
 - Trajectory type (circle or figure8)
 - Number of landmarks
 - Sensor FOV and range
 - Noise levels
 - Simulation duration
 
+**For Q-Learning details**, see [QLEARNING_INTEGRATION.md](QLEARNING_INTEGRATION.md)
+
 ## 📁 Project Structure
 ```
 ise-project/
 ├── src/
-│   ├── robot.py              # Robot motion model (unicycle dynamics)
+│   ├── robot.py              # Robot motion & trajectory control (supports Q-Learning)
 │   ├── ekf_slam.py           # Core EKF-SLAM algorithm
 │   ├── data_association.py   # Landmark matching and sensor simulation
 │   ├── visualization.py      # Real-time plotting and animation
+│   ├── qlearning_controller.py  # NEW: Reinforcement learning controller
 │   └── utils.py              # Helper functions (angle normalization, etc.)
 ├── config/
-│   └── params.py             # All simulation parameters
+│   └── params.py             # All simulation & Q-Learning parameters
 ├── tests/
 │   └── test_slam.py          # Unit tests for all components
 ├── outputs/
 │   ├── plots/                # Diagnostic plots
-│   └── videos/               # GIF animations
+│   ├── videos/               # GIF animations
+│   └── qlearning_model.npy   # Saved Q-table
 ├── main.py                   # Main simulation loop
 ├── create_animation.py       # GIF generation script
+├── run_3d_visualization.py   # Real-time 3D OpenGL viewer
+├── test_qlearning.py         # NEW: Test Q-Learning model
+├── compare_controllers.py    # NEW: Compare feedback vs Q-Learning
 ├── analyze_simulation.py     # Performance analysis tool
 ├── check_landmark_certainty.py  # Landmark identification analysis
+├── QLEARNING_INTEGRATION.md  # NEW: Q-Learning documentation
 └── requirements.txt          # Python dependencies
 ```
 
@@ -169,9 +190,14 @@ ise-project/
 ✅ **EKF Prediction** - Jacobian-based linearization  
 ✅ **EKF Update** - Joseph form covariance for numerical stability  
 ✅ **Data Association** - Mahalanobis distance gating  
-✅ **Trajectory Control** - Feedback control for circle and figure-8 paths  
+✅ **Trajectory Control** - Feedback control + Q-Learning RL for adaptive tracking  
 
 ### Advanced Features
+✅ **Q-Learning Control** - Reinforcement learning for trajectory tracking  
+✅ **Hybrid RL Approach** - Learned offset + base feedback (safe learning)  
+✅ **Online Learning** - Q-table updates during SLAM simulation  
+✅ **Model Persistence** - Save/load trained Q-tables  
+✅ **3D Visualization** - Real-time OpenGL rendering with PyGame  
 ✅ **Sensor Simulation** - FOV and range constraints  
 ✅ **Covariance Visualization** - Uncertainty ellipses  
 ✅ **Multiple Trajectories** - Circle and figure-8 paths  
@@ -191,12 +217,16 @@ From `analyze_simulation.py`:
 - `numpy` - Matrix operations and numerical computations
 - `matplotlib` - Plotting and GIF animation
 - `scipy` - Scientific computing utilities
+- `pygame` - 3D visualization window management
+- `PyOpenGL` - Real-time 3D rendering
 - `opencv-python` - Image processing (optional)
 - `PyPDF2` - PDF parsing (for project documentation)
 
 ## 📖 Documentation
-- `README.md` - This file
+- `README.md` - This file (overview and quick start)
+- `QLEARNING_INTEGRATION.md` - Q-Learning reinforcement learning guide  
 - `IMPLEMENTATION_GUIDE.md` - Detailed implementation walkthrough
+- `MATHEMATICAL_IMPLEMENTATION_REPORT.md` - Complete mathematical derivations
 - `PROJECT_SUMMARY.md` - High-level project overview
 - `ANIMATION_EXPLANATION.md` - GIF visualization guide
 - `ENHANCED_FEATURES.md` - Advanced features description
