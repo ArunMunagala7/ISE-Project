@@ -1,5 +1,5 @@
 """
-Visualize Landmark Coverage
+Visualize Landmark Coverage.
 Shows which landmarks were observed during the simulation
 """
 import numpy as np
